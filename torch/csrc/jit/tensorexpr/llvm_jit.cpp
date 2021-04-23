@@ -2,6 +2,8 @@
 
 #include <torch/csrc/jit/tensorexpr/intrinsic_symbols.h>
 #include <torch/csrc/jit/tensorexpr/llvm_jit.h>
+#include <torch/csrc/jit/tensorexpr/external_functions_registry.h>
+
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITSymbol.h>
@@ -21,10 +23,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 
-#include <torch/csrc/jit/tensorexpr/external_functions_registry.h>
-
-#include <c10/util/Half.h>
-
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -32,6 +30,26 @@
 #include <vector>
 
 using namespace torch::jit::tensorexpr;
+
+namespace {
+static std::string formatError(llvm::Error&& err, const char* msg) {
+  static constexpr char* defaultErrorMsg = "Unexpected failure in LLVM JIT";
+  std::string errorMsg(msg ? msg : defaultErrorMsg);
+  llvm::raw_string_ostream ss(errorMsg);
+  ss << ": " << err;
+  return ss.str();
+}
+
+template <typename T>
+static T assertSuccess(llvm::Expected<T> valOrErr, const char* msg = nullptr) {
+  TORCH_INTERNAL_ASSERT(valOrErr, formatError(valOrErr.takeError(), msg));
+  return std::move(*valOrErr);
+}
+
+static void assertSuccess(llvm::Error err, const char* msg = nullptr) {
+  TORCH_INTERNAL_ASSERT(!err, formatError(std::move(err), msg));
+}
+} // namespace
 
 template <typename T>
 static llvm::JITTargetAddress toAddress(T* Ptr) {
@@ -134,11 +152,11 @@ class TORCH_API PytorchLLVMJITImpl {
         "Failed to add module to compile layer");
   }
 
-  JITSymbol findSymbol(const std::string Name) {
+  JITSymbol findSymbol(const char* Name) {
     return assertSuccess(LLJ->lookup(Name));
   }
 
-  bool hasSymbol(const std::string& Name) {
+  bool hasSymbol(const char* Name) {
     return intrinsics.find(Name) != intrinsics.end();
   }
 
@@ -211,18 +229,18 @@ class TORCH_API PytorchLLVMJITImpl {
         "Failed to add module to compile layer");
   }
 
-  JITSymbol findSymbol(const std::string Name) {
+  JITSymbol findSymbol(const char* Name) {
     std::string MangledName;
     raw_string_ostream MangledNameStream(MangledName);
     Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
     return CompileLayer.findSymbol(MangledNameStream.str(), true);
   }
 
-  bool hasSymbol(const std::string& Name) {
+  bool hasSymbol(const char* Name) {
     return intrinsics.find(Name) != intrinsics.end();
   }
 
-  JITTargetAddress getSymbolAddress(const std::string Name) {
+  JITTargetAddress getSymbolAddress(const char* Name) {
     return assertSuccess(findSymbol(Name).getAddress());
   }
 
@@ -250,11 +268,11 @@ void PytorchLLVMJIT::addModule(
   impl_->addModule(std::move(M), std::move(C));
 }
 
-JITSymbol PytorchLLVMJIT::findSymbol(const std::string Name) {
+JITSymbol PytorchLLVMJIT::findSymbol(const char* Name) {
   return impl_->findSymbol(std::move(Name));
 }
 
-bool PytorchLLVMJIT::hasSymbol(const std::string& Name) {
+bool PytorchLLVMJIT::hasSymbol(const char*Name) {
   return impl_->hasSymbol(Name);
 }
 

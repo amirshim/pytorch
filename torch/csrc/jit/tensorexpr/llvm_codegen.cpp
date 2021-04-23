@@ -55,6 +55,26 @@ C10_DEFINE_bool(
 DEFINE_TRIGGER(llvm_codegen_created);
 DEFINE_TRIGGER(llvm_codegen_executed);
 
+namespace {
+static std::string formatError(llvm::Error&& err, const char* msg) {
+  static constexpr char* defaultErrorMsg = "Unexpected failure in LLVM JIT";
+  std::string errorMsg(msg ? msg : defaultErrorMsg);
+  llvm::raw_string_ostream ss(errorMsg);
+  ss << ": " << err;
+  return ss.str();
+}
+
+template <typename T>
+static T assertSuccess(llvm::Expected<T> valOrErr, const char* msg = nullptr) {
+  TORCH_INTERNAL_ASSERT(valOrErr, formatError(valOrErr.takeError(), msg));
+  return std::move(*valOrErr);
+}
+
+static void assertSuccess(llvm::Error err, const char* msg = nullptr) {
+  TORCH_INTERNAL_ASSERT(!err, formatError(std::move(err), msg));
+}
+} // namespace
+
 namespace torch {
 namespace jit {
 namespace tensorexpr {
@@ -1565,7 +1585,7 @@ LLVMCodeGenImpl::SimdCallee LLVMCodeGenImpl::getSimdFunction(
   std::string typeSuffix = basetype == DoubleTy_ ? "d" : "";
   std::string sleefName =
       "Sleef_" + basename + typeSuffix + std::to_string(lanes);
-  if (wantSleef(basename) && hasAVX && jit_->hasSymbol(sleefName)) {
+  if (wantSleef(basename) && hasAVX && jit_->hasSymbol(sleefName.data())) {
     name = std::move(sleefName);
     type = llvm::VectorType::get(basetype, ElementCount(lanes));
     useSimd = true;
