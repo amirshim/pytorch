@@ -257,6 +257,7 @@ core_sources_full_mobile = [
     "torch/csrc/jit/tensorexpr/external_functions_registry.cpp",
     "torch/csrc/jit/tensorexpr/hash_provider.cpp",
     "torch/csrc/jit/tensorexpr/intrinsic_symbols.cpp",
+    "torch/csrc/jit/tensorexpr/intrinsic_symbols_if.cpp",
     "torch/csrc/jit/tensorexpr/ir.cpp",
     "torch/csrc/jit/tensorexpr/ir_mutator.cpp",
     "torch/csrc/jit/tensorexpr/ir_printer.cpp",

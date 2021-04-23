@@ -1,9 +1,13 @@
 #ifdef TORCH_ENABLE_LLVM
 
-#include <torch/csrc/jit/tensorexpr/intrinsic_symbols.h>
-#include <torch/csrc/jit/tensorexpr/llvm_jit.h>
-#include <torch/csrc/jit/tensorexpr/external_functions_registry.h>
+// PyTorch CI builds both with cxx11 abi and without, but only builds
+// llvm with cxx11 abi.  To avoid proliferating builds, scope the
+// portion of llvm that uses cxx11 abi to this file.
 
+#define _GLIBCXX_USE_CXX11_ABI 1
+
+#include <torch/csrc/jit/tensorexpr/llvm_jit.h>
+#include <torch/csrc/jit/tensorexpr/intrinsic_symbols_if.h>
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITSymbol.h>
@@ -96,16 +100,15 @@ static void registerIntrinsics(
   };
 
   SymbolMap symbols;
-  for (auto const& sym : getIntrinsicSymbols()) {
-    symbols.insert(entry(sym.symbol, sym.address));
-    intrinsics.insert(sym.symbol);
+  SymbolAddressIf* symTab = getSymbols();
+  auto syms = symTab;
+  while (syms->symbol) {
+    assertSuccess(JD.define(absoluteSymbols({entry(syms->symbol, syms->address)})));
+    intrinsics.insert(syms->symbol);
+    syms++;
   }
-  assertSuccess(JD.define(absoluteSymbols(symbols)));
-
-  for (const auto& kv : getNNCFunctionRegistry()) {
-    assertSuccess(
-        JD.define(absoluteSymbols({entry(kv.first.c_str(), kv.second)})));
-  }
+  delete [] symTab;
+  
   assertSuccess(JD.define(
       absoluteSymbols({entry("DispatchParallel", DispatchParallel)})));
 }
