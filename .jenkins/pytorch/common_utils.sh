@@ -50,11 +50,15 @@ function get_exit_code() {
 }
 
 function file_diff_from_base() {
-  # The fetch may fail on Docker hosts, but it's not always necessary.
+  # The fetch may fail on Docker hosts, this fetch is necessary for GHA
   set +e
   git fetch origin master --quiet
   set -e
-  git diff --name-only "$(git merge-base origin/master HEAD)" > "$1"
+  if [[ -n "${GITHUB_ACTIONS}" ]]; then
+    git diff --name-only "${GITHUB_BASE_SHA}" "${GITHUB_SHA}" > "$1"
+  else
+    git diff --name-only "$(git merge-base origin/master HEAD)" > "$1"
+  fi
 }
 
 function get_bazel() {
